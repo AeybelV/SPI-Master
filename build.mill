@@ -20,13 +20,13 @@ object `SPI-Master` extends SbtModule { m =>
     "-language:reflectiveCalls",
     "-deprecation",
     "-feature",
-    "-Xcheckinit",
+    "-Xcheckinit"
   )
   override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.6.0",
+    ivy"org.chipsalliance::chisel:6.6.0"
   )
   override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.6.0",
+    ivy"org.chipsalliance:::chisel-plugin:6.6.0"
   )
   object test extends SbtTests with TestModule.ScalaTest {
     override def ivyDeps = m.ivyDeps() ++ Agg(
