@@ -17,15 +17,17 @@ class SPIMasterTest extends AnyFreeSpec with Matchers {
       dut.reset.poke(false.B)
       dut.clock.step()
 
-      dut.io.mode.poke(0.U) // SPI Mode 0 (CPOL=0, CPHA=0)
+      dut.io.dataIn.poke(0xa5.U)
+      dut.io.start.poke(true.B)
+      dut.clock.step(1)
+      dut.io.start.poke(false.B)
 
-      // Provider test input data to SPI TX
-      dut.io.tx_data.bits.poke(0xa5.U)
-      dut.io.tx_data.valid.poke(true.B)
-      dut.clock.step()
-      dut.io.tx_data.valid.poke(false.B)
-      dut.clock.step()
+      while (dut.io.busy.peek().litToBoolean) {
+        // note: could drie miso here
+        dut.clock.step(1)
+      }
 
+      println(s"Received: ${dut.io.dataOut.peek().litValue}")
     }
   }
 }

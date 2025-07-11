@@ -16,80 +16,63 @@ class SPIBundle extends Bundle {
 class SPIMaster(val dataWidth: Int = 8, val clkDiv: Int = 4) extends Module {
   val io = IO(new Bundle {
     val spi = new SPIBundle() // SPI Lines
-    val mode = Input(UInt(2.W)) // SPI Mode (CPOL, CPHA)
-
-    // ransmit and Receive data
-    val tx_data = Flipped(Decoupled(UInt(dataWidth.W)))
-    val rx_data = Decoupled(UInt(dataWidth.W))
-
+    val dataIn = Input(UInt(8.W)) // Byte to send
+    val start = Input(Bool())
     val busy = Output(Bool())
+    val dataOut = Output(UInt(8.W)) // Received data
+    val done = Output(Bool())
   })
 
-  // States
-  val idle :: transfer :: done :: Nil = Enum(3)
-  val state = RegInit(idle)
-
-  val shiftReg = Reg(UInt(dataWidth.W))
-  val bitCnt = RegInit(0.U(log2Ceil(dataWidth).W))
-  val rxShiftReg = Reg(UInt(dataWidth.W))
-  val clkDivCnt = RegInit(0.U(log2Ceil(clkDiv).W))
-  val spiClkEn = RegInit(false.B)
-
+  // Clock divider for SCLK generation
+  val clkCnt = RegInit(0.U(log2Ceil(clkDiv).W))
   val sclkReg = RegInit(false.B)
-  val csReg = RegInit(true.B)
 
-  val cpol = io.mode(0)
-  val cpha = io.mode(1)
+  // Bit counters
+  val bitCnt = RegInit(0.U(3.W)) // 0 to 7
+  val shiftRegOut = Reg(UInt(8.W))
+  val shiftRegIn = Reg(UInt(8.W))
 
+  val active = RegInit(false.B)
+
+  // Initialize SPI lines
   io.spi.sclk := sclkReg
-  io.spi.cs := csReg
-  io.spi.mosi := shiftReg(dataWidth - 1)
-  io.busy := (state =/= idle)
-  // io.rx_data.bi := rxShiftReg
-  io.tx_data.ready := 0.B
-  io.rx_data.valid := 0.B
-  io.rx_data.bits := 0.U
+  io.spi.mosi := shiftRegOut(7)
+  io.spi.cs := !active
 
-  // SPI FSM
-  switch(state) {
-    is(idle) {
-      csReg := true.B // Deactivate chip select
-      sclkReg := cpol // Set clock polarity
-      io.tx_data.ready := 1.B
+  // Initialize module flags and data i/o
+  io.done := false.B
+  io.busy := active
+  io.dataOut := shiftRegIn
 
-      when(io.tx_data.valid & io.tx_data.ready) {
-        csReg := false.B // Activate chip select
-        shiftReg := io.tx_data.bits
-        bitCnt := (dataWidth - 1).U
-        state := transfer
-      }
-    }
-    is(transfer) {
+  // When instructed to start operation
+  when(io.start && !active) {
+    active := true.B
+    clkCnt := 0.U
+    sclkReg := false.B
+    bitCnt := 0.U
+    shiftRegOut := io.dataIn
+    shiftRegIn := io.spi.miso
+  }
 
-      when(clkDivCnt === (clkDiv - 1).U) {
-        sclkReg := ~sclkReg
-        csReg := false.B
-        clkDivCnt := 0.U
-        when(sclkReg === !cpol) {
+  // During a active transmission or operation
+  when(active) {
+    clkCnt := clkCnt + 1.U
+    when(clkCnt === (clkDiv - 1).U) {
+      clkCnt := 0.U
+      sclkReg := ~sclkReg
 
-          io.tx_data.ready := 1.B
-          shiftReg := shiftReg << 1
-          when(bitCnt === 0.U) {
-            state := done
-          }.otherwise {
+      when(sclkReg) {
+        // On rising edge of SCLK: capture MISO
+        shiftRegIn := Cat(shiftRegIn(6, 0), io.spi.miso)
 
-            bitCnt := bitCnt - 1.U
-          }
+        when(bitCnt === 7.U) {
+          active := false.B
+          io.done := true.B
+        }.otherwise {
+          bitCnt := bitCnt + 1.U
+          shiftRegOut := Cat(shiftRegOut(6, 0), 0.U(1.W))
         }
-      }.otherwise {
-        clkDivCnt := clkDivCnt + 1.U
       }
-
-    }
-    is(done) {
-      csReg := true.B // Deactivate chip select
-      io.tx_data.ready := 0.U
-      state := idle
     }
   }
 }
