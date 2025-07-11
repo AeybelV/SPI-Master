@@ -23,7 +23,7 @@ It supports:
  ├─ src
  │  ├─ main/scala/spi       # Chisel sources
  │  └─ test/scala/spi       # Chisel tests
- └─ verilator               # Verilator tests
+ └─ tb                      # Verilator test benches
 ```
 
 ## Dependencies
@@ -77,7 +77,7 @@ To run the verilator tests after verilog generation
 
 ```sh
 verilator --cc SPIMaster.sv
-verilator --trace -cc SPIMaster.sv --exe verilator/<test bench name>
+verilator --trace -cc SPIMaster.sv --exe tb/<test bench name>
 make -C obj_dir -f VSPIMaster.mk VSPIMaster
 ./VSPIMaster
 ```
